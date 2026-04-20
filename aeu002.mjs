@@ -66,11 +66,31 @@ const lumiElectricityMeter = (args) => {
 };
 
 // Power reporting for each socket is at a different endpoint to the switch state
-const lumiActivePower = () => {
+const lumiActivePower = (args) => {
+    const {name, description, endpoint} = args;
+
+    const fromZigbeeConverters = [
+        {
+            cluster: "haElectricalMeasurement",
+            type: ["attributeReport", "readResponse"],
+            convert: (model, msg) => {
+                if (!("activePower" in msg.data)) return;
+                if (msg.endpoint.ID !== endpoint) return;
+
+                const power = msg.data.activePower;
+                if (typeof power !== "number") return;
+
+                return {[name]: power};
+            },
+        },
+    ];
+
+    const exposes = [e.numeric(name, ea.STATE).withUnit("W").withDescription(description)];
+
     return {
         isModernExtend: true,
-        fromZigbee: [fz.electrical_measurement],
-        exposes: [e.power().withEndpoint("1"), e.power().withEndpoint("2"), e.power().withEndpoint("usb")],
+        fromZigbee: fromZigbeeConverters,
+        exposes,
     };
 };
 
@@ -214,8 +234,11 @@ export default {
             deviceTemperature: false,
         }),
 
-        // Power reporting for each socket is at a different endpoint to the socket switch state
-        lumiActivePower(),
+       // Power reporting for each socket is at a different endpoint to the socket switch state
+        lumiActivePower({name: "total_power", description: "Total combined outlet power consumption", endpoint: 1}),
+        lumiActivePower({name: "power_socket_1_and_usb", description: "Combined power of socket 1 and USB", endpoint: 2}),
+        lumiActivePower({name: "power_socket_2", description: "Power of socket 2", endpoint: 3}),
+
 
         lumiElectricityMeter({voltage: false}),
 
