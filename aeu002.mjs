@@ -1,3 +1,4 @@
+import fz from "zigbee-herdsman-converters/converters/fromZigbee";
 import * as exposes from "zigbee-herdsman-converters/lib/exposes";
 import * as lumi from "zigbee-herdsman-converters/lib/lumi";
 import {fromZigbee} from "zigbee-herdsman-converters/lib/lumi";
@@ -65,31 +66,11 @@ const lumiElectricityMeter = (args) => {
 };
 
 // Power reporting for each socket is at a different endpoint to the switch state
-const lumiActivePower = (args) => {
-    const {name, description, endpoint} = args;
-
-    const fromZigbeeConverters = [
-        {
-            cluster: "haElectricalMeasurement",
-            type: ["attributeReport", "readResponse"],
-            convert: (model, msg) => {
-                if (!("activePower" in msg.data)) return;
-                if (msg.endpoint.ID !== endpoint) return;
-
-                const power = msg.data.activePower;
-                if (typeof power !== "number") return;
-
-                return {[name]: power};
-            },
-        },
-    ];
-
-    const exposes = [e.numeric(name, ea.STATE).withUnit("W").withDescription(description)];
-
+const lumiActivePower = () => {
     return {
         isModernExtend: true,
-        fromZigbee: fromZigbeeConverters,
-        exposes,
+        fromZigbee: [fz.electrical_measurement],
+        exposes: [e.power().withEndpoint("1"), e.power().withEndpoint("2"), e.power().withEndpoint("usb")],
     };
 };
 
@@ -222,6 +203,7 @@ export default {
     },
 
     extend: [
+        lumiModernExtend.addManuSpecificLumiCluster(),
         // Device temperateure sensor appears not to be present on this model
         m.deviceEndpoints({endpoints: {1: 1, 2: 2, usb: 3}}),
         m.forcePowerSource({powerSource: "Mains (single phase)"}),
@@ -233,9 +215,7 @@ export default {
         }),
 
         // Power reporting for each socket is at a different endpoint to the socket switch state
-        lumiActivePower({name: "total_power", description: "Total combined outlet power consumption", endpoint: 1}),
-        lumiActivePower({name: "power_socket_1_and_usb", description: "Combined power of socket 1 and USB", endpoint: 2}),
-        lumiActivePower({name: "power_socket_2", description: "Power of socket 2", endpoint: 3}),
+        lumiActivePower(),
 
         lumiElectricityMeter({voltage: false}),
 
